@@ -1,0 +1,49 @@
+cmake:
+  application:
+    configuration-dir: '/home/a.paleczny/stm_workspace/zephyr-stm32n6-ai-people-detection/app'
+    source-dir: '/home/a.paleczny/stm_workspace/zephyr-stm32n6-ai-people-detection/app'
+  board:
+    name: 'stm32n6570_dk'
+    path:
+     - '/home/a.paleczny/stm_workspace/zephyr/boards/st/stm32n6570_dk'
+    qualifiers: 'stm32n657xx'
+    revision: ''
+  devicetree:
+    bindings-dirs:
+     - '/home/a.paleczny/stm_workspace/zephyr/dts/bindings'
+    files:
+     - '/home/a.paleczny/stm_workspace/zephyr/boards/st/stm32n6570_dk/stm32n6570_dk.dts'
+     - '/home/a.paleczny/stm_workspace/zephyr/boards/shields/st_b_cams_imx_mb1854/st_b_cams_imx_mb1854.overlay'
+     - '/home/a.paleczny/stm_workspace/zephyr-stm32n6-ai-people-detection/app/app.overlay'
+    include-dirs:
+     - '/home/a.paleczny/stm_workspace/modules/hal/stm32/dts'
+     - '/home/a.paleczny/stm_workspace/zephyr/include'
+     - '/home/a.paleczny/stm_workspace/zephyr/include/zephyr'
+     - '/home/a.paleczny/stm_workspace/zephyr/dts/common'
+     - '/home/a.paleczny/stm_workspace/zephyr/dts/vendor'
+     - '/home/a.paleczny/stm_workspace/zephyr/dts/rx'
+     - '/home/a.paleczny/stm_workspace/zephyr/dts/x86'
+     - '/home/a.paleczny/stm_workspace/zephyr/dts/xtensa'
+     - '/home/a.paleczny/stm_workspace/zephyr/dts/sparc'
+     - '/home/a.paleczny/stm_workspace/zephyr/dts/riscv'
+     - '/home/a.paleczny/stm_workspace/zephyr/dts/posix'
+     - '/home/a.paleczny/stm_workspace/zephyr/dts/arm64'
+     - '/home/a.paleczny/stm_workspace/zephyr/dts/arm'
+     - '/home/a.paleczny/stm_workspace/zephyr/dts/arc'
+     - '/home/a.paleczny/stm_workspace/zephyr/dts'
+    user-files:
+     - '/home/a.paleczny/stm_workspace/zephyr-stm32n6-ai-people-detection/app/app.overlay'
+  kconfig:
+    files:
+     - '/home/a.paleczny/stm_workspace/zephyr/boards/st/stm32n6570_dk/stm32n6570_dk_defconfig'
+     - '/home/a.paleczny/stm_workspace/zephyr-stm32n6-ai-people-detection/app/prj.conf'
+     - '/home/a.paleczny/stm_workspace/zephyr-stm32n6-ai-people-detection/build/app/zephyr/.config.sysbuild'
+    user-files:
+     - '/home/a.paleczny/stm_workspace/zephyr-stm32n6-ai-people-detection/app/prj.conf'
+  toolchain:
+    name: 'zephyr'
+    path: '/home/a.paleczny/zephyr-sdk-0.17.4'
+  zephyr:
+    version: '4.2.99'
+    zephyr-base: '/home/a.paleczny/stm_workspace/zephyr'
+version: '0.1.0'

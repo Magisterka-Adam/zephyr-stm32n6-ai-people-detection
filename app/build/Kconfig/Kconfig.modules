@@ -1,0 +1,39 @@
+menu "zephyr-stm32-mw-isp (/home/a.paleczny/stm_workspace/st/lib/zephyr-stm32-mw-isp)"
+osource "/home/a.paleczny/stm_workspace/st/lib/zephyr-stm32-mw-isp/Kconfig"
+config ZEPHYR_ZEPHYR_STM32_MW_ISP_MODULE
+	bool
+	default y
+endmenu
+menu "cmsis-dsp (/home/a.paleczny/stm_workspace/modules/lib/cmsis-dsp)"
+osource "$(ZEPHYR_CMSIS_DSP_KCONFIG)"
+config ZEPHYR_CMSIS_DSP_MODULE
+	bool
+	default y
+endmenu
+menu "cmsis_6 (/home/a.paleczny/stm_workspace/modules/hal/cmsis_6)"
+osource "$(ZEPHYR_CMSIS_6_KCONFIG)"
+config ZEPHYR_CMSIS_6_MODULE
+	bool
+	default y
+endmenu
+config ZEPHYR_HAL_STM32_MODULE
+	bool
+	default y
+
+config ZEPHYR_HAL_STM32_MODULE_BLOBS
+	bool
+menu "lvgl (/home/a.paleczny/stm_workspace/modules/lib/gui/lvgl)"
+osource "/home/a.paleczny/stm_workspace/modules/lib/gui/lvgl/zephyr/Kconfig"
+config ZEPHYR_LVGL_MODULE
+	bool
+	default y
+endmenu
+menu "mbedtls (/home/a.paleczny/stm_workspace/modules/crypto/mbedtls)"
+osource "$(ZEPHYR_MBEDTLS_KCONFIG)"
+config ZEPHYR_MBEDTLS_MODULE
+	bool
+	default y
+endmenu
+config ZEPHYR_MCUBOOT_MODULE
+	bool
+	default y

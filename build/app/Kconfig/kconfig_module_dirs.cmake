@@ -1,0 +1,8 @@
+set(kconfig_env_dirs)
+list(APPEND kconfig_env_dirs ZEPHYR_ZEPHYR_STM32_MW_ISP_MODULE_DIR=/home/a.paleczny/stm_workspace/st/lib/zephyr-stm32-mw-isp)
+list(APPEND kconfig_env_dirs ZEPHYR_CMSIS_DSP_MODULE_DIR=/home/a.paleczny/stm_workspace/modules/lib/cmsis-dsp)
+list(APPEND kconfig_env_dirs ZEPHYR_CMSIS_6_MODULE_DIR=/home/a.paleczny/stm_workspace/modules/hal/cmsis_6)
+list(APPEND kconfig_env_dirs ZEPHYR_HAL_STM32_MODULE_DIR=/home/a.paleczny/stm_workspace/modules/hal/stm32)
+list(APPEND kconfig_env_dirs ZEPHYR_LVGL_MODULE_DIR=/home/a.paleczny/stm_workspace/modules/lib/gui/lvgl)
+list(APPEND kconfig_env_dirs ZEPHYR_MBEDTLS_MODULE_DIR=/home/a.paleczny/stm_workspace/modules/crypto/mbedtls)
+list(APPEND kconfig_env_dirs ZEPHYR_MCUBOOT_MODULE_DIR=/home/a.paleczny/stm_workspace/bootloader/mcuboot)

@@ -24,7 +24,7 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(app LANGUAGES C)
 
 target_include_directories(app PRIVATE inc Model)
-target_sources(app PRIVATE src/main.c src/model.c Model/network.c)
+target_sources(app PRIVATE src/main.c src/model.c Model/network_yolov8_416.c)
 
 # lib_vision_models_pp
 target_include_directories(app PRIVATE ../Lib/lib_vision_models_pp/lib_vision_models_pp/Inc
@@ -37,7 +37,9 @@ target_sources(app PRIVATE ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/
                            ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_yolov2.c
                            ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_yolov5.c
                            ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_yolov8.c
-                           ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_st_yolox.c)
+                           ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_st_yolox.c
+                           ../Lib/ai-postprocessing-wrapper/app_postprocess_od_yolov8_ui.c
+                           )
 
 # AI_Runtime
 target_compile_definitions(app PRIVATE LL_ATON_PLATFORM=LL_ATON_PLAT_STM32N6
@@ -47,7 +49,7 @@ target_compile_definitions(app PRIVATE LL_ATON_PLATFORM=LL_ATON_PLAT_STM32N6
                            LL_ATON_DBG_BUFFER_INFO_EXCLUDED=1
                            APP_HAS_PARALLEL_NETWORKS=0)
 
-target_include_directories(app PRIVATE ../Lib/AI_Runtime/Inc
+target_include_directories(app PRIVATE ../Lib/AI_Runtime/Inc ../Lib/ai-postprocessing-wrapper/
                            ../Lib/AI_Runtime/Npu/ll_aton
                            ../Lib/AI_Runtime/Npu/Devices/STM32N6XX)
 

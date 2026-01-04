@@ -1,0 +1,1 @@
+"mcuboot":"/home/a.paleczny/stm_workspace/bootloader/mcuboot":"/home/a.paleczny/stm_workspace/bootloader/mcuboot/boot/zephyr/sysbuild"
