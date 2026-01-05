@@ -1,1 +1,4 @@
 build/
+build-mcuboot/
+.vscode/*
+!.vscode/c_cpp_properties.json
