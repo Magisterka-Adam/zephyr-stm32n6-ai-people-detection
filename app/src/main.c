@@ -31,6 +31,10 @@
 
 #include "model.h"
 
+#include <zephyr/storage/disk_access.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/fs/fs.h>
+
 LOG_MODULE_REGISTER(main);
 
 #define DISPLAY_WIDTH DT_PROP(DT_CHOSEN(zephyr_display), width)
@@ -44,6 +48,27 @@ LOG_MODULE_REGISTER(main);
 
 static struct k_thread nn_thread;
 static K_THREAD_STACK_DEFINE(nn_thread_stack, 4096);
+
+#include <ff.h>
+
+/*
+ *  Note the fatfs library is able to mount only strings inside _VOLUME_STRS
+ *  in ffconf.h
+ */
+#if defined(CONFIG_DISK_DRIVER_MMC)
+#define DISK_DRIVE_NAME "SD2"
+#else
+#define DISK_DRIVE_NAME "SD"
+#endif
+
+#define DISK_MOUNT_PT "/"DISK_DRIVE_NAME":"
+
+static FATFS fat_fs;
+/* mounting info */
+static struct fs_mount_t mp = {
+	.type = FS_FATFS,
+	.fs_data = &fat_fs,
+};
 
 static int display_setup(const struct device *const display_dev)
 {
@@ -282,57 +307,81 @@ static int video_setup(const struct device *const main_dev, const struct device 
 
 int main()
 {
-	const struct device *const camera_aux_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_camera_aux));
-	const struct device *const display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
-	const struct device *const video_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_camera));
-	struct video_buffer *vbuf;
-	lv_obj_t *canvas;
-	k_tid_t nn_tid;
-	int ret;
+	// const struct device *const camera_aux_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_camera_aux));
+	// const struct device *const display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+	// const struct device *const video_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_camera));
+	// struct video_buffer *vbuf;
+	// lv_obj_t *canvas;
+	// k_tid_t nn_tid;
+	// int ret;
 
-	__ASSERT_NO_MSG(device_is_ready(video_dev));
-	__ASSERT_NO_MSG(device_is_ready(camera_aux_dev));
-	__ASSERT_NO_MSG(device_is_ready(display_dev));
+	// __ASSERT_NO_MSG(device_is_ready(video_dev));
+	// __ASSERT_NO_MSG(device_is_ready(camera_aux_dev));
+	// __ASSERT_NO_MSG(device_is_ready(display_dev));
 
-	/* move main thread priority to lowest one so we let others thread a chance to run */
-	k_thread_priority_set(k_current_get(), K_LOWEST_APPLICATION_THREAD_PRIO);
+	// /* move main thread priority to lowest one so we let others thread a chance to run */
+	// k_thread_priority_set(k_current_get(), K_LOWEST_APPLICATION_THREAD_PRIO);
 
-	/* create thread for nn process */
-	nn_tid = k_thread_create(&nn_thread, nn_thread_stack, K_THREAD_STACK_SIZEOF(nn_thread_stack), model_thread_ep,
-				 (void *) camera_aux_dev, NULL, NULL, 0, 0, K_NO_WAIT);
-	__ASSERT_NO_MSG(nn_tid);
+	// /* create thread for nn process */
+	// nn_tid = k_thread_create(&nn_thread, nn_thread_stack, K_THREAD_STACK_SIZEOF(nn_thread_stack), model_thread_ep,
+	// 			 (void *) camera_aux_dev, NULL, NULL, 0, 0, K_NO_WAIT);
+	// __ASSERT_NO_MSG(nn_tid);
 
-	/* Configure display */
-	ret = display_setup(display_dev);
-	__ASSERT_NO_MSG(ret == 0);
+	// /* Configure display */
+	// ret = display_setup(display_dev);
+	// __ASSERT_NO_MSG(ret == 0);
 
-	/* Configure video pipe */
-	ret = video_setup(video_dev, camera_aux_dev);
-	__ASSERT_NO_MSG(ret == 0);
+	// /* Configure video pipe */
+	// ret = video_setup(video_dev, camera_aux_dev);
+	// __ASSERT_NO_MSG(ret == 0);
 
-	/* Start main pipe */
-	LOG_INF("Starting main pipe");
-	ret = video_stream_start(video_dev, VIDEO_BUF_TYPE_OUTPUT);
-	__ASSERT_NO_MSG(ret == 0);
+	// /* Start main pipe */
+	// LOG_INF("Starting main pipe");
+	// ret = video_stream_start(video_dev, VIDEO_BUF_TYPE_OUTPUT);
+	// __ASSERT_NO_MSG(ret == 0);
 
-	LOG_INF("Starting aux pipe");
-	ret = video_stream_start(camera_aux_dev, VIDEO_BUF_TYPE_OUTPUT);
-	__ASSERT_NO_MSG(ret == 0);
+	// LOG_INF("Starting aux pipe");
+	// ret = video_stream_start(camera_aux_dev, VIDEO_BUF_TYPE_OUTPUT);
+	// __ASSERT_NO_MSG(ret == 0);
 
-	LOG_INF("STARTING");
+	// LOG_INF("STARTING");
 
-	canvas = lv_canvas_create(lv_scr_act());
-	while (1) {
-		ret = video_dequeue(video_dev, &vbuf, K_FOREVER);
-		__ASSERT_NO_MSG(ret == 0);
+	// canvas = lv_canvas_create(lv_scr_act());
+	// while (1) {
+	// 	ret = video_dequeue(video_dev, &vbuf, K_FOREVER);
+	// 	__ASSERT_NO_MSG(ret == 0);
 
-		lv_canvas_set_buffer(canvas, vbuf->buffer, DISPLAY_WIDTH, DISPLAY_HEIGHT, LV_COLOR_FORMAT_RGB565);
-		decorate_canvas(canvas);
-		lv_timer_handler();
+	// 	lv_canvas_set_buffer(canvas, vbuf->buffer, DISPLAY_WIDTH, DISPLAY_HEIGHT, LV_COLOR_FORMAT_RGB565);
+	// 	decorate_canvas(canvas);
+	// 	lv_timer_handler();
 
-		ret = video_enqueue(video_dev, vbuf);
-		__ASSERT_NO_MSG(ret == 0);
+	// 	ret = video_enqueue(video_dev, vbuf);
+	// 	__ASSERT_NO_MSG(ret == 0);
+	// }
+
+	static const char *disk_mount_pt = DISK_MOUNT_PT;
+	mp.mnt_point = disk_mount_pt;
+
+	int res = fs_mount(&mp);
+
+	if (res == FS_RET_OK) {
+		LOG_INF("Disk mounted.");
+		/* Try to unmount and remount the disk */
+		res = fs_unmount(&mp);
+		if (res != FS_RET_OK) {
+			LOG_INF("Error unmounting disk");
+			return res;
+		}
+		res = fs_mount(&mp);
+		if (res != FS_RET_OK) {
+			LOG_INF("Error remounting disk");
+			return res;
+		}
+
+	} else {
+		LOG_INF("Error mounting disk.");
 	}
 
+	fs_unmount(&mp);
 	return 0;
 }

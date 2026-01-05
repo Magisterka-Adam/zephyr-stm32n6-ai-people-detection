@@ -1,2 +1,0 @@
-# Load board Kconfig descriptions.
-osource "/home/a.paleczny/stm_workspace/zephyr/boards/st/stm32n6570_dk/Kconfig.stm32n6570_dk"
