@@ -27,19 +27,9 @@
 #include "npu_cache.h"
 #include "ll_aton_rt_user_api.h"
 #include "od_yolov8_pp_if.h"
-#include "app_postprocess.h"
 
 #define DISPLAY_WIDTH DT_PROP(DT_CHOSEN(zephyr_display), width)
 #define DISPLAY_HEIGHT DT_PROP(DT_CHOSEN(zephyr_display), height)
-
-/* post process conf */
-#define AI_OD_YOLOV8_PP_NB_CLASSES        (1)
-// #define AI_OD_YOLOV8_PP_TOTAL_BOXES       (3549)
-#define AI_OD_YOLOV8_PP_MAX_BOXES_LIMIT   (10)
-#define AI_OD_YOLOV8_PP_CONF_THRESHOLD    (0.5)
-#define AI_OD_YOLOV8_PP_IOU_THRESHOLD     (0.5)
-
-#define AI_OD_ST_YOLOX_PP_NB_ANCHORS        (1)
 
 
 LOG_MODULE_REGISTER(model);
@@ -51,6 +41,7 @@ static od_pp_outBuffer_t pp_detections_buffer[AI_OD_YOLOV8_PP_MAX_BOXES_LIMIT];
 static od_pp_outBuffer_t detections[AI_OD_YOLOV8_PP_MAX_BOXES_LIMIT];
 static int detections_nb = -1;
 static struct k_mutex boxes_lock;
+static int8_t scratch_buffer[AI_OD_YOLOV8_PP_TOTAL_BOXES * 6];
 
 static int latest_inference_time = 0;
 
@@ -137,105 +128,89 @@ static void model_detection_to_box(od_pp_outBuffer_t *d, struct dbox *b)
 
 void model_thread_ep(void *arg1, void *arg2, void *arg3)
 {
-    const struct device *const camera_aux_dev = arg1;
+	const LL_Buffer_InfoTypeDef *nn_out_info = LL_ATON_Output_Buffers_Info_Default();
+	const LL_Buffer_InfoTypeDef *nn_in_info = LL_ATON_Input_Buffers_Info_Default();
+	const struct device *const camera_aux_dev = arg1;
+	od_yolov8_pp_static_param_t pp_params;
+	struct video_buffer *vbuf;
+	od_yolov8_pp_in_centroid_t pp_input;
+	od_pp_out_t pp_output;
+	uint32_t nn_out_len;
+	uint32_t nn_in_len;
+	uint8_t *nn_out;
+	uint32_t tick;
+	int ret;
+	int i;
 
-    const LL_Buffer_InfoTypeDef *nn_in_info  = LL_ATON_Input_Buffers_Info_Default();
-    const LL_Buffer_InfoTypeDef *nn_out_info = LL_ATON_Output_Buffers_Info_Default();
+	ret = k_mutex_init(&boxes_lock);
+	__ASSERT_NO_MSG(ret == 0);
+	detections_nb = 0;
 
-    uint32_t nn_in_len = LL_Buffer_len(nn_in_info);
+	model_npu_init();
 
-    /* ---- enumerate outputs (bare-metal style) ---- */
-    int number_output = 0;
-    while (nn_out_info[number_output].name != NULL) {
-        number_output++;
-    }
-    __ASSERT_NO_MSG(number_output > 0);
+	/* Initialize Cube.AI/ATON ... */
+	LL_ATON_RT_RuntimeInit();
+	/* ... and model instance */
+	LL_ATON_RT_Init_Network(&NN_Instance_Default);
 
-    void *outs[8];          /* adjust if you can have more than 8 outputs */
-    int32_t outs_len[8];
+	nn_in_len = LL_Buffer_len(nn_in_info);
+	nn_out_len = LL_Buffer_len(nn_out_info);
+	nn_out = LL_Buffer_addr_base(nn_out_info);
+	__ASSERT_NO_MSG(nn_out);
 
-    __ASSERT_NO_MSG(number_output <= (int)ARRAY_SIZE(outs));
+	/* pp init */
+    int32_t error = AI_OD_POSTPROCESS_ERROR_NO;
+    od_yolov8_pp_static_param_t *params = &pp_params;
+    const LL_Buffer_InfoTypeDef *buffers_info = LL_ATON_Output_Buffers_Info(&NN_Instance_Default);
+    params->raw_output_scale = *(buffers_info[0].scale);
+    params->raw_output_zero_point = *(buffers_info[0].offset);
+    params->nb_classes = AI_OD_YOLOV8_PP_NB_CLASSES;
+    params->nb_total_boxes = AI_OD_YOLOV8_PP_TOTAL_BOXES;
+    params->max_boxes_limit = AI_OD_YOLOV8_PP_MAX_BOXES_LIMIT;
+    params->conf_threshold = AI_OD_YOLOV8_PP_CONF_THRESHOLD;
+    params->iou_threshold = AI_OD_YOLOV8_PP_IOU_THRESHOLD;
+    params->pScratchBuff = scratch_buffer;
+    error = od_yolov8_pp_reset(params);
+    __ASSERT_NO_MSG(error);
 
-    for (int i = 0; i < number_output; i++) {
-        outs[i]     = (void *)LL_Buffer_addr_start(&nn_out_info[i]);
-        outs_len[i] = (int32_t)LL_Buffer_len(&nn_out_info[i]);
-        __ASSERT_NO_MSG(outs[i] != NULL);
-    }
+	while (1) {
+		ret = video_dequeue(camera_aux_dev, &vbuf, K_FOREVER);
+		__ASSERT_NO_MSG(ret == 0);
 
-    /* postprocess */
-    od_yolov8_pp_static_param_t pp_params;
-    od_pp_out_t pp_output;
-    int ret;
+		/* run inference */
+		 /* setup input buffer. No need cache ops since full hw path DCMIPP -> NPU */
+		ret = LL_ATON_Set_User_Input_Buffer_Default(0, vbuf->buffer, nn_in_len);
+		__ASSERT_NO_MSG(ret == LL_ATON_User_IO_NOERROR);
+		 /* setup output. Invalidate ouput so post-process access latest inference result */
+		ret = sys_cache_data_invd_range(nn_out, nn_out_len);
+		__ASSERT_NO_MSG(ret == 0);
+		 /* let's go */
+		tick = HAL_GetTick();
+		Run_Inference(&NN_Instance_Default);
+		tick = HAL_GetTick() - tick;
+		latest_inference_time = tick;
 
-    ret = k_mutex_init(&boxes_lock);
-    __ASSERT_NO_MSG(ret == 0);
-    detections_nb = 0;
+		ret = video_enqueue(camera_aux_dev, vbuf);
+		__ASSERT_NO_MSG(ret == 0);
 
-    model_npu_init();
-
-    LL_ATON_RT_RuntimeInit();
-    LL_ATON_RT_Init_Network(&NN_Instance_Default);
-
-    app_postprocess_init(&pp_params, &NN_Instance_Default); /* assumes void-return like your bare-metal */
-    /* If your app_postprocess_init returns int, change to: ret = ...; __ASSERT_NO_MSG(ret == 0); */
-
-    LOG_INF("NN in_len=%u, outputs=%d", nn_in_len, number_output);
-
-    while (1) {
-        struct video_buffer *vbuf = NULL;
-
-        /* If you get no logs, you may be stuck here waiting for frames */
-        ret = video_dequeue(camera_aux_dev, &vbuf, K_FOREVER);
-        __ASSERT_NO_MSG(ret == 0);
-        __ASSERT_NO_MSG(vbuf && vbuf->buffer);
-
-        uint8_t *p = vbuf->buffer;
-        for (size_t i = 0; i < nn_in_len; i += 3) {
-            uint8_t r = p[i+0];
-            p[i+0] = p[i+2];
-            p[i+2] = r;
-        }
-        sys_cache_data_flush_range(vbuf->buffer, nn_in_len); /* ensure swap is visible */
+		/* post process */
+		pp_input.pRaw_detections = (int8_t *) nn_out;
+		pp_output.pOutBuff = pp_detections_buffer;
+		ret = od_yolov8_pp_process_int8(&pp_input, &pp_output, &pp_params);
+		__ASSERT_NO_MSG(ret == 0);
 
 
-        /* set input buffer to camera frame */
-        ret = LL_ATON_Set_User_Input_Buffer_Default(0, vbuf->buffer, nn_in_len);
-        __ASSERT_NO_MSG(ret == LL_ATON_User_IO_NOERROR);
+		/* boxes state */
+		ret = k_mutex_lock(&boxes_lock, K_FOREVER);
+		__ASSERT_NO_MSG(ret == 0);
 
-        /* invalidate all outputs before postprocess reads them */
-        for (int i = 0; i < number_output; i++) {
-            sys_cache_data_invd_range(outs[i], outs_len[i]);
-        }
+		detections_nb = pp_output.nb_detect;
+		for (i = 0; i < pp_output.nb_detect; i++)
+			detections[i] = pp_output.pOutBuff[i];
 
-        uint32_t t0 = k_uptime_get_32();
-        Run_Inference(&NN_Instance_Default);
-        uint32_t dt = k_uptime_get_32() - t0;
-        latest_inference_time = (int)dt;
-        
-        
-        /* NOW invalidate outputs so CPU reads the fresh NPU result */
-        // sys_cache_data_invd_range(nn_out, nn_in_len);
-        
-        ret = video_enqueue(camera_aux_dev, vbuf);
-        __ASSERT_NO_MSG(ret == 0);
-
-        int32_t pp_ret = app_postprocess_run(outs, number_output, &pp_output, &pp_params);
-        __ASSERT_NO_MSG(pp_ret == 0);
-
-        /* store detections */
-        ret = k_mutex_lock(&boxes_lock, K_FOREVER);
-        __ASSERT_NO_MSG(ret == 0);
-
-        detections_nb = MIN((int)pp_output.nb_detect, AI_OD_YOLOV8_PP_MAX_BOXES_LIMIT);
-        for (int i = 0; i < detections_nb; i++) {
-            detections[i] = pp_output.pOutBuff[i];
-        }
-
-        ret = k_mutex_unlock(&boxes_lock);
-        __ASSERT_NO_MSG(ret == 0);
-
-        LOG_INF("Inference=%ums, detected=%d", latest_inference_time, detections_nb);
-    }
+		ret = k_mutex_unlock(&boxes_lock);
+		__ASSERT_NO_MSG(ret == 0);
+	}
 }
 
 int model_get_boxes(struct dbox *boxes, int boxes_nb)
