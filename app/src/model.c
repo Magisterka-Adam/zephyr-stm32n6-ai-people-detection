@@ -53,6 +53,11 @@ static int detections_nb = -1;
 static struct k_mutex boxes_lock;
 
 static int latest_inference_time = 0;
+static int number_output;
+static void *outs[8];          /* adjust if you can have more than 8 outputs */
+static int32_t outs_len[8];
+static uint32_t nn_in_len;
+static od_yolov8_pp_static_param_t pp_params;
 
 static void Run_Inference(NN_Instance_TypeDef *network_instance)
 {
@@ -264,4 +269,87 @@ int model_get_boxes(struct dbox *boxes, int boxes_nb)
 int model_get_latest_inference_time()
 {
 	return latest_inference_time;
+}
+
+void nn_init(){
+    const LL_Buffer_InfoTypeDef *nn_in_info  = LL_ATON_Input_Buffers_Info_Default();
+    const LL_Buffer_InfoTypeDef *nn_out_info = LL_ATON_Output_Buffers_Info_Default();
+
+    nn_in_len = LL_Buffer_len(nn_in_info);
+
+    /* ---- enumerate outputs (bare-metal style) ---- */
+    while (nn_out_info[number_output].name != NULL) {
+        number_output++;
+    }
+    __ASSERT_NO_MSG(number_output > 0);
+
+    __ASSERT_NO_MSG(number_output <= (int)ARRAY_SIZE(outs));
+
+    for (int i = 0; i < number_output; i++) {
+        outs[i]     = (void *)LL_Buffer_addr_start(&nn_out_info[i]);
+        outs_len[i] = (int32_t)LL_Buffer_len(&nn_out_info[i]);
+        __ASSERT_NO_MSG(outs[i] != NULL);
+    }
+
+    /* postprocess */
+
+    int ret;
+
+    ret = k_mutex_init(&boxes_lock);
+    __ASSERT_NO_MSG(ret == 0);
+    detections_nb = 0;
+
+    model_npu_init();
+
+    LL_ATON_RT_RuntimeInit();
+    LL_ATON_RT_Init_Network(&NN_Instance_Default);
+
+    app_postprocess_init(&pp_params, &NN_Instance_Default); /* assumes void-return like your bare-metal */
+    /* If your app_postprocess_init returns int, change to: ret = ...; __ASSERT_NO_MSG(ret == 0); */
+
+    LOG_INF("NN in_len=%u, outputs=%d", nn_in_len, number_output);
+}
+
+void run_nn_from_sd_card(uint8_t* image){
+    od_pp_out_t pp_output;
+
+    sys_cache_data_flush_range(image, nn_in_len);
+
+    int ret = LL_ATON_Set_User_Input_Buffer_Default(0, image, nn_in_len);
+    __ASSERT_NO_MSG(ret == LL_ATON_User_IO_NOERROR);
+
+    /* invalidate all outputs before postprocess reads them */
+    for (int i = 0; i < number_output; i++) {
+        sys_cache_data_invd_range(outs[i], outs_len[i]);
+    }
+
+    uint32_t t0 = k_uptime_get_32();
+    Run_Inference(&NN_Instance_Default);
+    uint32_t dt = k_uptime_get_32() - t0;
+    latest_inference_time = (int)dt;
+    
+    
+    /* NOW invalidate outputs so CPU reads the fresh NPU result */
+   
+    for (int i = 0; i < number_output; i++) {
+        sys_cache_data_invd_range(outs[i], outs_len[i]);
+    }
+
+    int32_t pp_ret = app_postprocess_run(outs, number_output, &pp_output, &pp_params);
+    __ASSERT_NO_MSG(pp_ret == 0);
+
+    /* store detections */
+    ret = k_mutex_lock(&boxes_lock, K_FOREVER);
+    __ASSERT_NO_MSG(ret == 0);
+
+    detections_nb = MIN((int)pp_output.nb_detect, AI_OD_YOLOV8_PP_MAX_BOXES_LIMIT);
+    for (int i = 0; i < detections_nb; i++) {
+        detections[i] = pp_output.pOutBuff[i];
+    }
+
+    ret = k_mutex_unlock(&boxes_lock);
+    __ASSERT_NO_MSG(ret == 0);
+
+    LOG_INF("Inference=%ums, detected=%d", latest_inference_time, detections_nb);
+
 }

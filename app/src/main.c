@@ -69,6 +69,10 @@ static struct fs_mount_t mp = {
 };
 
 uint8_t image_data[NN_HEIGHT * NN_WIDTH * NN_BPP];
+static struct video_buffer *sd_vbuf;
+
+void nn_init();
+void run_nn_from_sd_card(uint8_t* image);
 
 static int display_setup(const struct device *const display_dev)
 {
@@ -353,26 +357,19 @@ static int ls_dir(const char *path)
 				return ret;
 			}
 
-			while ((bytes = fs_read(&file, image_data, sizeof(image_data))) > 0) {
-				/* buf[0..bytes-1] contains raw binary data */
+			bytes = fs_read(&file, sd_vbuf->buffer, NN_HEIGHT * NN_WIDTH * NN_BPP);
+			__ASSERT_NO_MSG(bytes == NN_HEIGHT * NN_WIDTH * NN_BPP);
 
-				// LOG_INF("Read %d bytes", bytes);
+			run_nn_from_sd_card(sd_vbuf->buffer);
 
-				/* Example: process data here */
-				/* memcpy(), feed to NPU, parse header, etc. */
-			}
-
-			if (bytes < 0) {
-				LOG_ERR("fs_read failed (%d)", bytes);
-			}
-			else {
-				LOG_INF("Read file %s (size = %zu)",
-					entry.name, entry.size);
-			}
 
 			fs_close(&file);
 		}
 		count++;
+		if(count > 100){
+			LOG_INF("END OF BENCHMARK");
+			break;
+		}
 	}
 
 	/* Verify fs_closedir() */
@@ -410,6 +407,10 @@ int main()
 	// /* Configure display */
 	ret = display_setup(display_dev);
 	__ASSERT_NO_MSG(ret == 0);
+
+	nn_init();
+	sd_vbuf = video_buffer_aligned_alloc(NN_HEIGHT * NN_WIDTH * NN_BPP, 32, K_FOREVER);
+	__ASSERT_NO_MSG(sd_vbuf && sd_vbuf->buffer);
 
 	// /* Configure video pipe */
 	// ret = video_setup(video_dev, camera_aux_dev);
