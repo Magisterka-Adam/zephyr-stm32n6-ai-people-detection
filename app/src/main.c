@@ -33,7 +33,9 @@
 
 #include <zephyr/storage/disk_access.h>
 #include <zephyr/logging/log.h>
+
 #include <zephyr/fs/fs.h>
+#include <ff.h>
 
 LOG_MODULE_REGISTER(main);
 
@@ -49,12 +51,6 @@ LOG_MODULE_REGISTER(main);
 static struct k_thread nn_thread;
 static K_THREAD_STACK_DEFINE(nn_thread_stack, 4096);
 
-#include <ff.h>
-
-/*
- *  Note the fatfs library is able to mount only strings inside _VOLUME_STRS
- *  in ffconf.h
- */
 #if defined(CONFIG_DISK_DRIVER_MMC)
 #define DISK_DRIVE_NAME "SD2"
 #else
@@ -64,11 +60,15 @@ static K_THREAD_STACK_DEFINE(nn_thread_stack, 4096);
 #define DISK_MOUNT_PT "/"DISK_DRIVE_NAME":"
 
 static FATFS fat_fs;
-/* mounting info */
+
 static struct fs_mount_t mp = {
-	.type = FS_FATFS,
-	.fs_data = &fat_fs,
+    .type = FS_FATFS,
+    .fs_data = &fat_fs,
+    .storage_dev = (void *)DISK_DRIVE_NAME,
+    .mnt_point = DISK_MOUNT_PT,
 };
+
+uint8_t image_data[NN_HEIGHT * NN_WIDTH * NN_BPP];
 
 static int display_setup(const struct device *const display_dev)
 {
@@ -304,32 +304,112 @@ static int video_setup(const struct device *const main_dev, const struct device 
 
 	return 0;
 }
+// /* --- Simple RGB565 framebuffer for the LVGL canvas --- */
+// static uint16_t jpg_fb[DISPLAY_WIDTH * DISPLAY_HEIGHT];
+
+static int ls_dir(const char *path)
+{
+	int res;
+	struct fs_dir_t dirp;
+	static struct fs_dirent entry;
+	int count = 0;
+
+	fs_dir_t_init(&dirp);
+
+	/* Verify fs_opendir() */
+	res = fs_opendir(&dirp, path);
+	if (res) {
+		LOG_INF("Error opening dir %s [%d]", path, res);
+		return res;
+	}
+
+	LOG_INF("\nListing dir %s ...", path);
+	for (;;) {
+		/* Verify fs_readdir() */
+		res = fs_readdir(&dirp, &entry);
+
+		/* entry.name[0] == 0 means end-of-dir */
+		if (res || entry.name[0] == 0) {
+			break;
+		}
+
+		if (entry.type == FS_DIR_ENTRY_DIR) {
+			LOG_INF("[DIR ] %s", entry.name);
+		} else {
+			LOG_INF("[FILE] %s (size = %zu)",
+					entry.name, entry.size);
+			ssize_t bytes;
+			struct fs_file_t file;
+			int ret;
+
+			fs_file_t_init(&file);
+
+			char full_path[256];
+			snprintf(full_path, sizeof(full_path), "%s/%s", path, entry.name);
+
+			ret = fs_open(&file, full_path, FS_O_READ);
+			if (ret < 0) {
+				LOG_ERR("fs_open(%s) failed (%d)", full_path, ret);
+				return ret;
+			}
+
+			while ((bytes = fs_read(&file, image_data, sizeof(image_data))) > 0) {
+				/* buf[0..bytes-1] contains raw binary data */
+
+				// LOG_INF("Read %d bytes", bytes);
+
+				/* Example: process data here */
+				/* memcpy(), feed to NPU, parse header, etc. */
+			}
+
+			if (bytes < 0) {
+				LOG_ERR("fs_read failed (%d)", bytes);
+			}
+			else {
+				LOG_INF("Read file %s (size = %zu)",
+					entry.name, entry.size);
+			}
+
+			fs_close(&file);
+		}
+		count++;
+	}
+
+	/* Verify fs_closedir() */
+	fs_closedir(&dirp);
+	if (res == 0) {
+		res = count;
+	}
+
+	return res;
+}
+
 
 int main()
 {
 	// const struct device *const camera_aux_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_camera_aux));
-	// const struct device *const display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+	const struct device *const display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
 	// const struct device *const video_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_camera));
 	// struct video_buffer *vbuf;
 	// lv_obj_t *canvas;
-	// k_tid_t nn_tid;
-	// int ret;
+	k_tid_t nn_tid;
+	int ret;
 
 	// __ASSERT_NO_MSG(device_is_ready(video_dev));
 	// __ASSERT_NO_MSG(device_is_ready(camera_aux_dev));
-	// __ASSERT_NO_MSG(device_is_ready(display_dev));
+	__ASSERT_NO_MSG(device_is_ready(display_dev));
 
 	// /* move main thread priority to lowest one so we let others thread a chance to run */
 	// k_thread_priority_set(k_current_get(), K_LOWEST_APPLICATION_THREAD_PRIO);
 
 	// /* create thread for nn process */
 	// nn_tid = k_thread_create(&nn_thread, nn_thread_stack, K_THREAD_STACK_SIZEOF(nn_thread_stack), model_thread_ep,
-	// 			 (void *) camera_aux_dev, NULL, NULL, 0, 0, K_NO_WAIT);
+	// 			 (void *) NULL, NULL, NULL, 0, 0, K_NO_WAIT);
 	// __ASSERT_NO_MSG(nn_tid);
 
 	// /* Configure display */
-	// ret = display_setup(display_dev);
-	// __ASSERT_NO_MSG(ret == 0);
+	ret = display_setup(display_dev);
+	__ASSERT_NO_MSG(ret == 0);
 
 	// /* Configure video pipe */
 	// ret = video_setup(video_dev, camera_aux_dev);
@@ -362,26 +442,26 @@ int main()
 	static const char *disk_mount_pt = DISK_MOUNT_PT;
 	mp.mnt_point = disk_mount_pt;
 
+	// mp.mnt_point = DISK_MOUNT_PT;
+	LOG_INF("Mount point configured as: %s", mp.mnt_point);
+
 	int res = fs_mount(&mp);
-
-	if (res == FS_RET_OK) {
-		LOG_INF("Disk mounted.");
-		/* Try to unmount and remount the disk */
-		res = fs_unmount(&mp);
-		if (res != FS_RET_OK) {
-			LOG_INF("Error unmounting disk");
-			return res;
-		}
-		res = fs_mount(&mp);
-		if (res != FS_RET_OK) {
-			LOG_INF("Error remounting disk");
-			return res;
-		}
-
-	} else {
-		LOG_INF("Error mounting disk.");
+	LOG_INF("fs_mount res=%d", res);
+	if (res != FR_OK) {
+		LOG_ERR("Mount failed");
+		return 0;
 	}
+	const char *dir_path = "/SD:/BIN_2017";
 
-	fs_unmount(&mp);
+	ls_dir(dir_path);
+
+	/* Run slideshow: 1000 ms per image */
+	// run_slideshow(img, dir_path, 1000);
+
+	// /* keep mounted */
+	// while (1) {
+	// 	lv_timer_handler();
+	// 	k_sleep(K_SECONDS(1));
+	// }
 	return 0;
 }
