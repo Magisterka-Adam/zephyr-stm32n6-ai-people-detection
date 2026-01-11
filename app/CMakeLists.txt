@@ -24,7 +24,7 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(app LANGUAGES C)
 
 target_include_directories(app PRIVATE inc Model)
-target_sources(app PRIVATE src/main.c src/model.c Model/network_yolov8_416.c)
+target_sources(app PRIVATE src/main.c src/model.c Model/network_mobilenet.c)
 
 # lib_vision_models_pp
 target_include_directories(app PRIVATE ../Lib/lib_vision_models_pp/lib_vision_models_pp/Inc
@@ -38,7 +38,10 @@ target_sources(app PRIVATE ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/
                            ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_yolov5.c
                            ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_yolov8.c
                            ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_st_yolox.c
+                           ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_ssd_st.c
+                           ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_ssd.c
                            ../Lib/ai-postprocessing-wrapper/app_postprocess_od_yolov8_ui.c
+                           ../Lib/ai-postprocessing-wrapper/app_postprocess_od_st_ssd_uf.c
                            )
 
 # AI_Runtime

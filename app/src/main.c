@@ -71,11 +71,11 @@ static void print_text(lv_layer_t *layer, int x, int y, lv_text_align_t align, c
 	/* shadow */
 	lv_draw_label_dsc_init(&tdsc);
 	tdsc.color = lv_color_make(16, 16, 16);
-	tdsc.font = &lv_font_unscii_16;
+	tdsc.font = &lv_font_unscii_8;
 	coords.x1 = x + 1;
 	coords.y1 = y + 1;
-	coords.x2 = DISPLAY_WIDTH;
-	coords.y2 = DISPLAY_HEIGHT;
+	coords.x2 = NN_WIDTH;
+	coords.y2 = NN_HEIGHT;
 	tdsc.text = text_buffer;
 	tdsc.text_local = 1;
 	tdsc.align = align;
@@ -113,14 +113,14 @@ static void decorate_canvas(lv_obj_t * canvas)
 		   SYS_KERNEL_VER_MAJOR(ver), SYS_KERNEL_VER_MINOR(ver), SYS_KERNEL_VER_PATCHLEVEL(ver));
 
 	/* Draw inference time */
-	print_text(&layer, 0, DISPLAY_HEIGHT - font->line_height * 3, LV_TEXT_ALIGN_LEFT, "Inference %d ms",
+	print_text(&layer, 0, NN_HEIGHT - font->line_height * 3, LV_TEXT_ALIGN_LEFT, "Inference %d ms",
 		   latest_inference_time);
 	latest_inference_time = latest_inference_time ? latest_inference_time : 1;
-	print_text(&layer, 0, DISPLAY_HEIGHT - font->line_height * 2, LV_TEXT_ALIGN_LEFT, "Fps       %d",
+	print_text(&layer, 0, NN_HEIGHT - font->line_height * 2, LV_TEXT_ALIGN_LEFT, "Fps       %d",
 		   1000 / latest_inference_time);
 #ifdef CONFIG_CPU_LOAD
 	load = cpu_load_get(1);
-	print_text(&layer, 0, DISPLAY_HEIGHT - font->line_height * 1, LV_TEXT_ALIGN_LEFT, "cpu load  %d.%d%%",
+	print_text(&layer, 0, NN_HEIGHT - font->line_height * 1, LV_TEXT_ALIGN_LEFT, "cpu load  %d.%d%%",
 		   load / 10, load % 10);
 #else
 	(void)load;
@@ -146,8 +146,8 @@ static void decorate_canvas(lv_obj_t * canvas)
 
 static int video_crop_setup(const struct device *const video_dev, uint32_t sensor_width, uint32_t sensor_height)
 {
-	const float ratioy = (float)sensor_height / DISPLAY_HEIGHT;
-	const float ratiox = (float)sensor_width / DISPLAY_WIDTH;
+	const float ratioy = (float)sensor_height / NN_HEIGHT;
+	const float ratiox = (float)sensor_width / NN_WIDTH;
 	const float ratio = MIN(ratiox, ratioy);
 	struct video_selection crop = {
 		.type = VIDEO_BUF_TYPE_OUTPUT,
@@ -158,8 +158,8 @@ static int video_crop_setup(const struct device *const video_dev, uint32_t senso
 	__ASSERT_NO_MSG(ratio < 64);
 
 	crop.target = VIDEO_SEL_TGT_CROP;
-	crop.rect.width = DISPLAY_WIDTH * ratio;
-	crop.rect.height = DISPLAY_HEIGHT * ratio;
+	crop.rect.width = NN_WIDTH * ratio;
+	crop.rect.height = NN_HEIGHT * ratio;
 	crop.rect.left = (sensor_width - crop.rect.width + 1) /2;
 	crop.rect.top = (sensor_height - crop.rect.height + 1) / 2;
 
@@ -215,11 +215,11 @@ static int video_main_setup(const struct device *const video_dev, uint32_t senso
 	/* setup crop, compose and output */
 	ret = video_crop_setup(video_dev, sensor_width, sensor_height);
 	__ASSERT_NO_MSG(ret == 0);
-	ret = video_resize_setup(video_dev, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+	ret = video_resize_setup(video_dev, NN_WIDTH, NN_HEIGHT);
 	__ASSERT_NO_MSG(ret == 0);
 	fmt.pixelformat = VIDEO_FOURCC_FROM_STR("RGBP");
-	fmt.width = DISPLAY_WIDTH;
-	fmt.height = DISPLAY_HEIGHT;
+	fmt.width = NN_WIDTH;
+	fmt.height = NN_HEIGHT;
 	fmt.pitch = fmt.width * DISPLAY_BPP;
 	ret = video_set_format(video_dev, &fmt);
 	__ASSERT_NO_MSG(ret == 0);
@@ -243,7 +243,7 @@ static int video_aux_setup(const struct device *const video_dev, uint32_t sensor
 	__ASSERT_NO_MSG(ret == 0);
 	ret = video_resize_setup(video_dev, NN_WIDTH, NN_HEIGHT);
 	__ASSERT_NO_MSG(ret == 0);
-	fmt.pixelformat = VIDEO_FOURCC_FROM_STR("RGB3");
+	fmt.pixelformat = VIDEO_FOURCC_FROM_STR("RGBP");
 	fmt.width = NN_WIDTH;
 	fmt.height = NN_HEIGHT;
 	fmt.pitch = fmt.width * NN_BPP;
@@ -326,7 +326,7 @@ int main()
 		ret = video_dequeue(video_dev, &vbuf, K_FOREVER);
 		__ASSERT_NO_MSG(ret == 0);
 
-		lv_canvas_set_buffer(canvas, vbuf->buffer, DISPLAY_WIDTH, DISPLAY_HEIGHT, LV_COLOR_FORMAT_RGB565);
+		lv_canvas_set_buffer(canvas, vbuf->buffer, NN_WIDTH, NN_HEIGHT, LV_COLOR_FORMAT_RGB565);
 		decorate_canvas(canvas);
 		lv_timer_handler();
 

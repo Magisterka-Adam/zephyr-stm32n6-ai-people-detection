@@ -33,28 +33,26 @@
 #define ASPECT_RATIO_MODE ASPECT_RATIO_CROP
 
 /* Postprocessing type configuration */
-#define POSTPROCESS_TYPE    POSTPROCESS_OD_YOLO_V8_UI
+#define POSTPROCESS_TYPE    POSTPROCESS_OD_ST_SSD_UF
 
-#define NN_HEIGHT     (416)
-#define NN_WIDTH      (416)
+#define NN_HEIGHT     (256)
+#define NN_WIDTH      (256)
+#define NN_BPP 3
 
 #define COLOR_BGR (0)
 #define COLOR_RGB (1)
 #define COLOR_MODE COLOR_RGB
 /* Classes */
-#define NB_CLASSES   (1)
+#define NB_CLASSES        (2)
 #define CLASSES_TABLE const char* classes_table[NB_CLASSES] = {\
-   "person"}\
-
-/* Postprocessing YOLO_V8 configuration */
-#define AI_OD_YOLOV8_PP_NB_CLASSES        (1)
-#define AI_OD_YOLOV8_PP_TOTAL_BOXES       (3549)
-#define AI_OD_YOLOV8_PP_MAX_BOXES_LIMIT   (10)
-#define AI_OD_YOLOV8_PP_CONF_THRESHOLD    (0.5)
-#define AI_OD_YOLOV8_PP_IOU_THRESHOLD     (0.5)
-
-#define AI_OD_ST_YOLOX_PP_NB_ANCHORS        (1)
-
-#define WELCOME_MSG_1         "Benchmark"
+"background",   "person"}\
+/* Postprocessing ST_SSD configuration */
+#define AI_OD_SSD_ST_PP_NB_CLASSES         (2)
+#define AI_OD_SSD_ST_PP_IOU_THRESHOLD      (0.2)
+#define AI_OD_SSD_ST_PP_CONF_THRESHOLD     (0.2)
+#define AI_OD_SSD_ST_PP_MAX_BOXES_LIMIT    (10)
+#define AI_OD_SSD_ST_PP_TOTAL_DETECTIONS   (6825)
+#define WELCOME_MSG_1         "st_ssd_mobilenet_v1_025_256_int8.tflite"
 #define WELCOME_MSG_2       "Model Running in STM32 MCU internal memory"
-#endif
+
+#endif      /* APP_CONFIG */
