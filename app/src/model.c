@@ -102,31 +102,27 @@ static void model_npu_init()
 
 static int clamp_point(int *x, int *y)
 {
-	int xi = *x;
-	int yi = *y;
+    int xi = *x, yi = *y;
 
-	if (*x < 0)
-		*x = 0;
-	if (*y < 0)
-		*y = 0;
-	if (*x >= DISPLAY_WIDTH)
-		*x = DISPLAY_WIDTH - 1;
-	if (*y >= DISPLAY_HEIGHT)
-		*y = DISPLAY_HEIGHT - 1;
+    if (*x < 0) *x = 0;
+    if (*y < 0) *y = 0;
+    if (*x >= NN_WIDTH)  *x = NN_WIDTH - 1;
+    if (*y >= NN_HEIGHT) *y = NN_HEIGHT - 1;
 
-	return (xi != *x) || (yi != *y);
+    return (xi != *x) || (yi != *y);
 }
+
 
 static void convert_length(float32_t wi, float32_t hi, int *wo, int *ho)
 {
-	*wo = (int) (DISPLAY_WIDTH * wi);
-	*ho = (int) (DISPLAY_HEIGHT * hi);
+	*wo = (int) (NN_WIDTH * wi);
+	*ho = (int) (NN_HEIGHT * hi);
 }
 
 static void convert_point(float32_t xi, float32_t yi, int *xo, int *yo)
 {
-	*xo = (int) (DISPLAY_WIDTH * xi);
-	*yo = (int) (DISPLAY_HEIGHT * yi);
+	*xo = (int) (NN_WIDTH * xi);
+	*yo = (int) (NN_HEIGHT * yi);
 }
 
 static void model_detection_to_box(od_pp_outBuffer_t *d, struct dbox *b)
