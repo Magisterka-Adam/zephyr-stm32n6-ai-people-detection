@@ -35,8 +35,8 @@
 /* Postprocessing type configuration */
 #define POSTPROCESS_TYPE    POSTPROCESS_OD_YOLO_V8_UI
 
-#define NN_HEIGHT     (416)
-#define NN_WIDTH      (416)
+#define NN_HEIGHT     (224)
+#define NN_WIDTH      (224)
 
 #define COLOR_BGR (0)
 #define COLOR_RGB (1)
