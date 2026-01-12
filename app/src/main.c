@@ -452,7 +452,7 @@ int main()
 		LOG_ERR("Mount failed");
 		return 0;
 	}
-	const char *dir_path = "/SD:/BIN_2017";
+	const char *dir_path = "/SD:/BIN_224";
 
 	ls_dir(dir_path);
 
