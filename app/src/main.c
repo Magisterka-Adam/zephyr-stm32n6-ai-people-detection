@@ -100,6 +100,7 @@ static int bench_min_ms = 0x7fffffff;
 static int bench_max_ms = 0;
 static int64_t bench_sum_ms = 0;
 static int bench_samples = 0;
+static uint16_t canvas_fb[DISPLAY_WIDTH * DISPLAY_HEIGHT];
 
 /* Touch sample container used by your callback */
 struct touch_point_t
@@ -429,8 +430,16 @@ static void draw_progress_bar(lv_layer_t *layer, int x, int y, int w, int h, flo
 	}
 }
 
+static void clear_canvas(lv_obj_t *canvas)
+{
+	/* Fast clear to black (change to lv_color_white() if you want) */
+	lv_canvas_fill_bg(canvas, lv_color_black(), LV_OPA_COVER);
+}
+
 static void decorate_benchmark(lv_obj_t *canvas, float percent)
 {
+	clear_canvas(canvas);
+
 	const lv_font_t *font = &lv_font_unscii_16;
 	lv_layer_t layer;
 	uint32_t ver = sys_kernel_version_get();
@@ -623,7 +632,7 @@ static int ls_dir(const char *path, lv_obj_t *canvas)
 	struct fs_dir_t dirp;
 	static struct fs_dirent entry;
 	int count = 0;
-	bench_total = 1500; // or 3000, whatever your target is
+	bench_total = 50; // or 3000, whatever your target is
 
 	fs_dir_t_init(&dirp);
 
@@ -746,10 +755,15 @@ static int ls_dir(const char *path, lv_obj_t *canvas)
 		}
 		bench_done = count;
 
-		decorate_benchmark(canvas, count / bench_total * 1000);
-		lv_timer_handler();
+		// if ((count % 10) == 0)
+		{
+			float percent = 100.0f * (float)count / (float)bench_total;
+			decorate_benchmark(canvas, percent);
+			lv_timer_handler();
+			k_sleep(K_MSEC(5));
+		}
 
-		if (count > 1500)
+		if (count == bench_total)
 		{
 			LOG_INF("END OF BENCHMARK");
 			break;
@@ -855,6 +869,20 @@ int main()
 	// LOG_INF("STARTING");
 
 	canvas = lv_canvas_create(lv_scr_act());
+	lv_canvas_set_buffer(canvas, canvas_fb, DISPLAY_WIDTH, DISPLAY_HEIGHT, LV_COLOR_FORMAT_RGB565);
+	lv_canvas_fill_bg(canvas, lv_color_black(), LV_OPA_COVER); /* optional */
+
+	lv_obj_t *start_label = lv_label_create(lv_scr_act());
+	lv_label_set_text(start_label,
+					  "Press Button 'USER 1' to start benchmark");
+	lv_obj_set_width(start_label, DISPLAY_WIDTH - 20);
+
+	/* Match print_text() font and alignment */
+	lv_obj_set_style_text_font(start_label, &lv_font_unscii_16, 0);
+	lv_obj_set_style_text_align(start_label, LV_TEXT_ALIGN_CENTER, 0);
+
+	lv_obj_align(start_label, LV_ALIGN_CENTER, 0, 0);
+
 	// while (1) {
 	// 	ret = video_dequeue(video_dev, &vbuf, K_FOREVER);
 	// 	__ASSERT_NO_MSG(ret == 0);
@@ -870,6 +898,9 @@ int main()
 		lv_timer_handler();
 		k_sleep(K_MSEC(10));
 	}
+
+	lv_obj_del(start_label);
+	lv_timer_handler(); /* flush deletion */
 
 	// ls_dir(dir_path, canvas);
 
