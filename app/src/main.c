@@ -626,13 +626,80 @@ static int video_setup(const struct device *const main_dev, const struct device 
 // /* --- Simple RGB565 framebuffer for the LVGL canvas --- */
 // static uint16_t jpg_fb[DISPLAY_WIDTH * DISPLAY_HEIGHT];
 
+static int count_files_in_dir(const char *path)
+{
+	struct fs_dir_t dirp;
+	struct fs_dirent entry;
+	int count = 0;
+	int res;
+
+	fs_dir_t_init(&dirp);
+
+	res = fs_opendir(&dirp, path);
+	if (res)
+	{
+		LOG_ERR("fs_opendir(%s) failed: %d", path, res);
+		return res;
+	}
+
+	while (1)
+	{
+		res = fs_readdir(&dirp, &entry);
+		if (res || entry.name[0] == 0)
+		{
+			break; /* end of dir */
+		}
+
+		if (entry.type == FS_DIR_ENTRY_FILE)
+		{
+			count++;
+		}
+	}
+
+	fs_closedir(&dirp);
+	return count;
+}
+
+static int count_csv_lines(const char *csv_path)
+{
+	struct fs_file_t file;
+	uint8_t ch;
+	int lines = 0;
+	int ret;
+
+	fs_file_t_init(&file);
+
+	ret = fs_open(&file, csv_path, FS_O_READ);
+	if (ret < 0)
+	{
+		LOG_ERR("fs_open(%s) failed: %d", csv_path, ret);
+		return ret;
+	}
+
+	while (fs_read(&file, &ch, 1) == 1)
+	{
+		if (ch == '\n')
+		{
+			lines++;
+		}
+	}
+
+	fs_close(&file);
+	return lines;
+}
+
 static int ls_dir(const char *path, lv_obj_t *canvas)
 {
 	int res;
 	struct fs_dir_t dirp;
 	static struct fs_dirent entry;
 	int count = 0;
-	bench_total = 50; // or 3000, whatever your target is
+	bench_total = count_csv_lines("/SD:/benchmark_224.csv");
+	if (bench_total <= 0)
+	{
+		LOG_ERR("No files found for benchmark");
+		return 0;
+	}
 
 	fs_dir_t_init(&dirp);
 
@@ -763,12 +830,13 @@ static int ls_dir(const char *path, lv_obj_t *canvas)
 			k_sleep(K_MSEC(5));
 		}
 
-		if (count == bench_total)
-		{
-			LOG_INF("END OF BENCHMARK");
-			break;
-		}
+		// if (count == bench_total)
+		// {
+		// 	LOG_INF("END OF BENCHMARK");
+		// 	break;
+		// }
 	}
+	LOG_INF("END OF BENCHMARK");
 
 	/* Verify fs_closedir() */
 	fs_closedir(&dirp);
