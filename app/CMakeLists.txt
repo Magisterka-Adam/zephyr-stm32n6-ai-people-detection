@@ -23,8 +23,8 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(app LANGUAGES C)
 
-target_include_directories(app PRIVATE inc Model)
-target_sources(app PRIVATE src/main.c src/model.c Model/network.c)
+target_include_directories(app PRIVATE inc Model/yolov2t)
+target_sources(app PRIVATE src/main.c src/model.c Model/yolov2t/network.c Model/yolov2t/stai_network.c src/npu_cache_hack.c)
 
 # lib_vision_models_pp
 target_include_directories(app PRIVATE ../Lib/lib_vision_models_pp/lib_vision_models_pp/Inc
@@ -37,9 +37,7 @@ target_sources(app PRIVATE ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/
                            ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_yolov2.c
                            ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_yolov5.c
                            ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_yolov8.c
-                           ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_st_yolox.c
-                           ../Lib/ai-postprocessing-wrapper/app_postprocess_od_yolov8_ui.c
-                           )
+                           ../Lib/lib_vision_models_pp/lib_vision_models_pp/Src/od_pp_st_yolox.c)
 
 # AI_Runtime
 target_compile_definitions(app PRIVATE LL_ATON_PLATFORM=LL_ATON_PLAT_STM32N6
@@ -49,9 +47,9 @@ target_compile_definitions(app PRIVATE LL_ATON_PLATFORM=LL_ATON_PLAT_STM32N6
                            LL_ATON_DBG_BUFFER_INFO_EXCLUDED=1
                            APP_HAS_PARALLEL_NETWORKS=0)
 
-target_include_directories(app PRIVATE ../Lib/AI_Runtime/Inc ../Lib/ai-postprocessing-wrapper/
+target_include_directories(app PRIVATE ../Lib/AI_Runtime/Inc
                            ../Lib/AI_Runtime/Npu/ll_aton
-                           ../Lib/AI_Runtime/Npu/Devices/STM32N6XX)
+                           ../Lib/AI_Runtime/Npu/Devices/STM32N6xx)
 
 target_sources(app PRIVATE ../Lib/AI_Runtime/Npu/ll_aton/ll_aton.c
                ../Lib/AI_Runtime/Npu/ll_aton/ll_aton_osal_zephyr.c
@@ -60,13 +58,16 @@ target_sources(app PRIVATE ../Lib/AI_Runtime/Npu/ll_aton/ll_aton.c
                ../Lib/AI_Runtime/Npu/ll_aton/ll_aton_lib_sw_operators.c
                ../Lib/AI_Runtime/Npu/ll_aton/ll_aton_rt_main.c
                ../Lib/AI_Runtime/Npu/ll_aton/ll_aton_runtime.c
+               ../Lib/AI_Runtime/Npu/ll_aton/ll_aton_cipher.c
+               ../Lib/AI_Runtime/Npu/ll_aton/ll_aton_stai_internal.c
                ../Lib/AI_Runtime/Npu/ll_aton/ll_aton_util.c
                ../Lib/AI_Runtime/Npu/ll_aton/ll_sw_float.c
                ../Lib/AI_Runtime/Npu/ll_aton/ll_sw_integer.c
                ../Lib/AI_Runtime/Npu/ll_aton/ecloader.c
-               ../Lib/AI_Runtime/Npu/Devices/STM32N6XX/npu_cache.c
-               ../Lib/AI_Runtime/Npu/Devices/STM32N6XX/mcu_cache.c)
+# temporary disable npu_cache.c which is replace by npu_cache_hack.c due to bad header inclusion order
+#               ../Lib/AI_Runtime/Npu/Devices/STM32N6xx/npu_cache.c
+               ../Lib/AI_Runtime/Npu/Devices/STM32N6xx/mcu_cache.c)
 
 target_link_directories(app PUBLIC ../Lib/AI_Runtime/Lib/GCC/ARMCortexM55)
 
-target_link_libraries(app PRIVATE :NetworkRuntime1020_CM55_GCC.a)
+target_link_libraries(app PRIVATE :NetworkRuntime1100_CM55_GCC.a)
