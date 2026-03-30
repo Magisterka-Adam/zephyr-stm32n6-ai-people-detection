@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    network.h
   * @author  STEdgeAI
-  * @date    2025-07-21 09:10:57
+  * @date    2026-03-30 17:57:02
   * @brief   Minimal description of the generated c-implemention of the network
   ******************************************************************************
   * @attention
@@ -20,7 +20,7 @@
 
 /******************************************************************************/
 #define LL_ATON_DEFAULT_C_MODEL_NAME        "Default"
-#define LL_ATON_DEFAULT_ORIGIN_MODEL_NAME   "quantized_tiny_yolo_v2_224_"
+#define LL_ATON_DEFAULT_ORIGIN_MODEL_NAME   "yolov2t_224_int8"
 
 /************************** USER ALLOCATED IOs ********************************/
 #define LL_ATON_DEFAULT_USER_ALLOCATED_INPUTS   (1)  // Number of input buffers not allocated by the compiler

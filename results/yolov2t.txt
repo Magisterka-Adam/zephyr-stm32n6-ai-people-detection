@@ -1,0 +1,8 @@
+[00:30:15.944,000] <inf> main: END OF BENCHMARK
+[00:30:15.944,000] <inf> main: Images with GT person   : 2692
+[00:30:15.944,000] <inf> main: Images with predictions : 2456
+[00:30:15.944,000] <inf> main: GT matched images       : 2058
+[00:30:15.944,000] <inf> main: Pred matched images     : 2058
+[00:30:15.944,000] <inf> main: Recall  : 2058/2692 = 76.44
+[00:30:15.944,000] <inf> main: Prec    : 2058/2456 = 83.79
+

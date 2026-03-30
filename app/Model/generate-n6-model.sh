@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # generate yolov2 model for
-stedgeai generate --no-inputs-allocation --model quantized_tiny_yolo_v2_224_.tflite --target stm32n6 --st-neural-art default@user_neuralart.json
+stedgeai generate --no-inputs-allocation --model yolov2t_224_int8.keras --target stm32n6 --st-neural-art default@user_neuralart.json
 cp st_ai_output/network_ecblobs.h .
 cp st_ai_output/network.c .
 cp st_ai_output/network.h .
