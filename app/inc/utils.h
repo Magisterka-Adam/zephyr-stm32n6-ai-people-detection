@@ -16,8 +16,8 @@
  ******************************************************************************
  */
 
-#ifndef __UTILS__
-#define __UTILS__
+#ifndef APP_UTILS_H
+#define APP_UTILS_H
 
 #include "model.h"
 
@@ -51,4 +51,4 @@ int gt_find_person_boxes_csv(const char *csv_path, const char *filename, struct 
 int count_files_in_dir(const char *path);
 int count_csv_lines(const char *csv_path);
 
-#endif /* __UTILS__ */
+#endif /* APP_UTILS_H */

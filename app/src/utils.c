@@ -87,7 +87,7 @@ int gt_find_person_boxes_csv(const char *csv_path,
 	}
 
 	/* Larger buffer to avoid truncating long lines */
-	static char line[4096];
+	char line[4096];
 	size_t pos = 0;
 	bool found = false;
 

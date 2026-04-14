@@ -32,9 +32,6 @@
 #include <lvgl_zephyr.h>
 
 #include <stdarg.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
 
 #include "model.h"
 #include "utils.h"
