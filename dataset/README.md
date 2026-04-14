@@ -19,9 +19,14 @@ Use python script to transform images to binaries:
 ```bash
 python3 transform_dataset_to_bin.py 
 ```
+Inside coco directory there directory `bin_256`. 
 
 ### Annotations
 Use python script to transform json anotations to csv read by stm32n6:
 ```bash
-python3 transform_dataset_to_bin.py 
+python3 transform_annotations.py 
 ```
+Inside coco directory there is csv file `benchmark_256.csv`. 
+
+### SD Card
+Move annotations csv and bin directory to SD Card.

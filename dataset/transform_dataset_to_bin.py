@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 
 IMAGE_DIRECTORY = "coco/val2017"
-TARGET_DIRECTORY = "coco/bin_2017_256"
+TARGET_DIRECTORY = "coco/bin_256"
 TARGET_SIZE = (256, 256)            # width, height
 
 directory = Path(IMAGE_DIRECTORY)
@@ -19,7 +19,7 @@ def save_bin(file: str):
     new_name = new_name.replace(IMAGE_DIRECTORY+"/", "")
 
     arr.tofile(f"{TARGET_DIRECTORY}/{new_name}")
-    print(f"Saved file {new_name}.bin | Size: {arr.size} bytes")
+    print(f"Saved file {new_name} | Size: {arr.size} bytes")
 
 for file in directory.glob("*.jpg"):
     save_bin(str(file))
