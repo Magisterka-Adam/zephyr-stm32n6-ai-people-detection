@@ -24,7 +24,7 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(app LANGUAGES C)
 
 target_include_directories(app PRIVATE inc Model)
-target_sources(app PRIVATE src/main.c src/model.c Model/network.c)
+target_sources(app PRIVATE src/main.c src/model.c src/utils.c Model/network.c)
 
 # lib_vision_models_pp
 target_include_directories(app PRIVATE ../Lib/lib_vision_models_pp/lib_vision_models_pp/Inc

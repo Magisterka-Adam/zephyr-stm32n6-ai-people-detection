@@ -32,8 +32,12 @@
 #include <lvgl_zephyr.h>
 
 #include <stdarg.h>
+#include <string.h>
+#include <stdlib.h>
+#include <errno.h>
 
 #include "model.h"
+#include "utils.h"
 
 #include <zephyr/storage/disk_access.h>
 #include <zephyr/logging/log.h>
@@ -73,19 +77,6 @@ static struct fs_mount_t mp = {
 	.mnt_point = DISK_MOUNT_PT,
 };
 
-#define MAX_GT_BOXES 64
-
-struct gt_boxes
-{
-	int count;
-	float xywh[MAX_GT_BOXES][4];
-};
-
-struct box_xyxy
-{
-	float x0, y0, x1, y1;
-};
-
 static int img_with_gt = 0;
 static int img_with_pred = 0;
 static int gt_matched = 0;
@@ -101,193 +92,13 @@ static int bench_max_ms = 0;
 static int64_t bench_sum_ms = 0;
 static int bench_samples = 0;
 static uint16_t canvas_fb[DISPLAY_WIDTH * DISPLAY_HEIGHT];
-
-/* Touch sample container used by your callback */
-struct touch_point_t
-{
-	int32_t x;
-	int32_t y;
-	bool pressed;
-};
-
-static struct touch_point_t touch_point;
-
-/* Semaphore signaled on evt->sync */
-K_SEM_DEFINE(sync, 0, 1);
-
-static inline struct box_xyxy xywh_to_xyxy(float x, float y, float w, float h)
-{
-	struct box_xyxy b = {x, y, x + w, y + h};
-	return b;
-}
-
-static inline struct box_xyxy dbox_to_xyxy(const struct dbox *b)
-{
-	struct box_xyxy o = {b->x, b->y, b->x + b->w, b->y + b->h};
-	return o;
-}
-
-static float iou_xyxy(struct box_xyxy a, struct box_xyxy b)
-{
-	float x1 = MAX(a.x0, b.x0);
-	float y1 = MAX(a.y0, b.y0);
-	float x2 = MIN(a.x1, b.x1);
-	float y2 = MIN(a.y1, b.y1);
-
-	float w = x2 - x1;
-	float h = y2 - y1;
-	if (w <= 0.f || h <= 0.f)
-		return 0.f;
-
-	float inter = w * h;
-	float area_a = MAX(0.f, a.x1 - a.x0) * MAX(0.f, a.y1 - a.y0);
-	float area_b = MAX(0.f, b.x1 - b.x0) * MAX(0.f, b.y1 - b.y0);
-	if (area_a <= 0.f || area_b <= 0.f)
-		return 0.f;
-
-	return inter / (area_a + area_b - inter + 1e-6f);
-}
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
-
-static void rstrip(char *s)
-{
-	size_t n = strlen(s);
-	while (n && (s[n - 1] == '\r' || s[n - 1] == '\n' ||
-				 s[n - 1] == ' ' || s[n - 1] == '\t'))
-	{
-		s[--n] = 0;
-	}
-}
-
-static void lskip(char **ps)
-{
-	while (**ps == ' ' || **ps == '\t')
-	{
-		(*ps)++;
-	}
-}
-
-static int gt_find_person_boxes_csv(const char *csv_path,
-									const char *filename,
-									struct gt_boxes *out)
-{
-	struct fs_file_t file;
-	fs_file_t_init(&file);
-
-	/* Always initialize output */
-	memset(out, 0, sizeof(*out));
-
-	int ret = fs_open(&file, csv_path, FS_O_READ);
-	if (ret < 0)
-	{
-		LOG_ERR("fs_open(%s) failed: %d", csv_path, ret);
-		return ret;
-	}
-
-	/* Larger buffer to avoid truncating long lines */
-	static char line[4096];
-	size_t pos = 0;
-	bool found = false;
-
-	for (;;)
-	{
-		uint8_t ch;
-		ssize_t r = fs_read(&file, &ch, 1);
-		if (r <= 0)
-		{
-			break; /* EOF */
-		}
-
-		if (ch == '\n' || pos == sizeof(line) - 1)
-		{
-			line[pos] = 0;
-			pos = 0;
-
-			/* If we hit buffer limit without '\n', the line is truncated.
-			 * We'll still parse what we have, but it's likely incomplete.
-			 */
-			rstrip(line);
-
-			if (line[0] == 0)
-			{
-				continue;
-			}
-
-			/* line: fname,count,x,y,w,h,x,y,w,h,... */
-			char *save = NULL;
-			char *tok = strtok_r(line, ",", &save);
-			if (!tok)
-			{
-				continue;
-			}
-
-			lskip(&tok);
-			rstrip(tok);
-
-			if (strcmp(tok, filename) != 0)
-			{
-				continue;
-			}
-
-			/* Matched filename */
-			found = true;
-
-			tok = strtok_r(NULL, ",", &save);
-			if (!tok)
-			{
-				fs_close(&file);
-				return -EINVAL;
-			}
-			lskip(&tok);
-			rstrip(tok);
-
-			int n = atoi(tok);
-			if (n < 0)
-				n = 0;
-			if (n > MAX_GT_BOXES)
-				n = MAX_GT_BOXES;
-
-			for (int i = 0; i < n; i++)
-			{
-				for (int k = 0; k < 4; k++)
-				{
-					tok = strtok_r(NULL, ",", &save);
-					if (!tok)
-					{
-						fs_close(&file);
-						return -EINVAL;
-					}
-					lskip(&tok);
-					rstrip(tok);
-					out->xywh[i][k] = strtof(tok, NULL);
-				}
-			}
-
-			out->count = n;
-			break; /* done */
-		}
-		else
-		{
-			line[pos++] = (char)ch;
-		}
-	}
-
-	fs_close(&file);
-
-	if (!found)
-	{
-		return -ENOENT; /* not found */
-	}
-	return 0;
-}
-
-uint8_t image_data[NN_HEIGHT * NN_WIDTH * NN_BPP];
 static struct video_buffer *sd_vbuf;
 
 void nn_init();
 void run_nn_from_sd_card(uint8_t *image);
+
+/* Semaphore signaled on evt->sync */
+K_SEM_DEFINE(sync, 0, 1);
 
 static int display_setup(const struct device *const display_dev)
 {
@@ -623,72 +434,8 @@ static int video_setup(const struct device *const main_dev, const struct device 
 
 	return 0;
 }
-// /* --- Simple RGB565 framebuffer for the LVGL canvas --- */
-// static uint16_t jpg_fb[DISPLAY_WIDTH * DISPLAY_HEIGHT];
 
-static int count_files_in_dir(const char *path)
-{
-	struct fs_dir_t dirp;
-	struct fs_dirent entry;
-	int count = 0;
-	int res;
-
-	fs_dir_t_init(&dirp);
-
-	res = fs_opendir(&dirp, path);
-	if (res)
-	{
-		LOG_ERR("fs_opendir(%s) failed: %d", path, res);
-		return res;
-	}
-
-	while (1)
-	{
-		res = fs_readdir(&dirp, &entry);
-		if (res || entry.name[0] == 0)
-		{
-			break; /* end of dir */
-		}
-
-		if (entry.type == FS_DIR_ENTRY_FILE)
-		{
-			count++;
-		}
-	}
-
-	fs_closedir(&dirp);
-	return count;
-}
-
-static int count_csv_lines(const char *csv_path)
-{
-	struct fs_file_t file;
-	uint8_t ch;
-	int lines = 0;
-	int ret;
-
-	fs_file_t_init(&file);
-
-	ret = fs_open(&file, csv_path, FS_O_READ);
-	if (ret < 0)
-	{
-		LOG_ERR("fs_open(%s) failed: %d", csv_path, ret);
-		return ret;
-	}
-
-	while (fs_read(&file, &ch, 1) == 1)
-	{
-		if (ch == '\n')
-		{
-			lines++;
-		}
-	}
-
-	fs_close(&file);
-	return lines;
-}
-
-static int ls_dir(const char *path, lv_obj_t *canvas)
+static int run_benchmark_on_sd_card(const char *path, lv_obj_t *canvas)
 {
 	int res;
 	struct fs_dir_t dirp;
@@ -822,19 +569,11 @@ static int ls_dir(const char *path, lv_obj_t *canvas)
 		}
 		bench_done = count;
 
-		// if ((count % 10) == 0)
-		{
-			float percent = 100.0f * (float)count / (float)bench_total;
-			decorate_benchmark(canvas, percent);
-			lv_timer_handler();
-			k_sleep(K_MSEC(5));
-		}
+		float percent = 100.0f * (float)count / (float)bench_total;
+		decorate_benchmark(canvas, percent);
+		lv_timer_handler();
+		k_sleep(K_MSEC(5));
 
-		// if (count == bench_total)
-		// {
-		// 	LOG_INF("END OF BENCHMARK");
-		// 	break;
-		// }
 	}
 	LOG_INF("END OF BENCHMARK");
 
@@ -876,11 +615,6 @@ static void button_input_cb(struct input_event *evt, void *user_data)
 		return;
 	}
 
-	// printk("Button %d %s at %" PRIu32 "\n",
-	// 	   evt->code,
-	// 	   evt->value ? "pressed" : "released",
-	// 	   k_cycle_get_32());
-
 	if (evt->value == 0)
 	{
 		LOG_INF("Button released - Benchmark started!!!!");
@@ -892,49 +626,20 @@ INPUT_CALLBACK_DEFINE(NULL, button_input_cb, NULL);
 
 int main()
 {
-	// const struct device *const camera_aux_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_camera_aux));
 	const struct device *const display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
-	// const struct device *const video_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_camera));
-	// struct video_buffer *vbuf;
 	lv_obj_t *canvas;
 	k_tid_t nn_tid;
 	int ret;
 
-	// __ASSERT_NO_MSG(device_is_ready(video_dev));
-	// __ASSERT_NO_MSG(device_is_ready(camera_aux_dev));
 	__ASSERT_NO_MSG(device_is_ready(display_dev));
-	__ASSERT_NO_MSG(device_is_ready(touch_dev));
 
-	// /* move main thread priority to lowest one so we let others thread a chance to run */
-	// k_thread_priority_set(k_current_get(), K_LOWEST_APPLICATION_THREAD_PRIO);
-
-	// /* create thread for nn process */
-	// nn_tid = k_thread_create(&nn_thread, nn_thread_stack, K_THREAD_STACK_SIZEOF(nn_thread_stack), model_thread_ep,
-	// 			 (void *) NULL, NULL, NULL, 0, 0, K_NO_WAIT);
-	// __ASSERT_NO_MSG(nn_tid);
-
-	// /* Configure display */
+	/* Configure display */
 	ret = display_setup(display_dev);
 	__ASSERT_NO_MSG(ret == 0);
 
 	nn_init();
 	sd_vbuf = video_buffer_aligned_alloc(NN_HEIGHT * NN_WIDTH * NN_BPP, 32, K_FOREVER);
 	__ASSERT_NO_MSG(sd_vbuf && sd_vbuf->buffer);
-
-	// /* Configure video pipe */
-	// ret = video_setup(video_dev, camera_aux_dev);
-	// __ASSERT_NO_MSG(ret == 0);
-
-	// /* Start main pipe */
-	// LOG_INF("Starting main pipe");
-	// ret = video_stream_start(video_dev, VIDEO_BUF_TYPE_OUTPUT);
-	// __ASSERT_NO_MSG(ret == 0);
-
-	// LOG_INF("Starting aux pipe");
-	// ret = video_stream_start(camera_aux_dev, VIDEO_BUF_TYPE_OUTPUT);
-	// __ASSERT_NO_MSG(ret == 0);
-
-	// LOG_INF("STARTING");
 
 	canvas = lv_canvas_create(lv_scr_act());
 	lv_canvas_set_buffer(canvas, canvas_fb, DISPLAY_WIDTH, DISPLAY_HEIGHT, LV_COLOR_FORMAT_RGB565);
@@ -951,16 +656,6 @@ int main()
 
 	lv_obj_align(start_label, LV_ALIGN_CENTER, 0, 0);
 
-	// while (1) {
-	// 	ret = video_dequeue(video_dev, &vbuf, K_FOREVER);
-	// 	__ASSERT_NO_MSG(ret == 0);
-
-	// 	lv_canvas_set_buffer(canvas, vbuf->buffer, DISPLAY_WIDTH, DISPLAY_HEIGHT, LV_COLOR_FORMAT_RGB565);
-
-	// 	ret = video_enqueue(video_dev, vbuf);
-	// 	__ASSERT_NO_MSG(ret == 0);
-	// }
-
 	while (!pressed)
 	{
 		lv_timer_handler();
@@ -970,12 +665,8 @@ int main()
 	lv_obj_del(start_label);
 	lv_timer_handler(); /* flush deletion */
 
-	// ls_dir(dir_path, canvas);
+	mp.mnt_point = DISK_MOUNT_PT;
 
-	static const char *disk_mount_pt = DISK_MOUNT_PT;
-	mp.mnt_point = disk_mount_pt;
-
-	// mp.mnt_point = DISK_MOUNT_PT;
 	LOG_INF("Mount point configured as: %s", mp.mnt_point);
 
 	int res = fs_mount(&mp);
@@ -987,15 +678,7 @@ int main()
 	}
 	const char *dir_path = "/SD:/BIN_224";
 
-	ls_dir(dir_path, canvas);
+	run_benchmark_on_sd_card(dir_path, canvas);
 
-	/* Run slideshow: 1000 ms per image */
-	// run_slideshow(img, dir_path, 1000);
-
-	// /* keep mounted */
-	// while (1) {
-	// 	lv_timer_handler();
-	// 	k_sleep(K_SECONDS(1));
-	// }
 	return 0;
 }
