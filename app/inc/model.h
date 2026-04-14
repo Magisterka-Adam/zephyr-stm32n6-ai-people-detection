@@ -28,7 +28,6 @@ struct dbox {
 	int h;
 };
 
-void model_thread_ep(void *arg1, void *arg2, void *arg3);
 int model_get_boxes(struct dbox *boxes, int boxes_nb);
 int model_get_latest_inference_time(void);
 
